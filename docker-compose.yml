@@ -1,0 +1,105 @@
+
+services:
+  # 🛡️ Service xác thực người dùng
+  auth-service:
+    build: ./backend/services/auth-service
+    ports:
+      - "5001:5001"
+    env_file:
+      - ./backend/services/auth-service/.env
+    depends_on:
+      - mongo
+
+  # 👥 Quản lý nhóm và thành viên
+  group-service:
+    build: ./backend/services/group-service
+    ports:
+      - "5002:5002"
+    env_file:
+      - ./backend/services/group-service/.env
+    depends_on:
+      - mongo
+      - auth-service
+
+  # 📄 Lưu trữ và truy xuất tài liệu
+  document-service:
+    build: ./backend/services/document-service
+    ports:
+      - "5003:5003"
+    env_file:
+      - ./backend/services/document-service/.env
+    volumes:
+      - ./uploads:/app/uploads   # Mount thư mục uploads để lưu file bền vững
+    depends_on:
+      - mongo
+      - auth-service
+
+  # 📊 Theo dõi hoạt động nhóm
+  activity-service:
+    build: ./backend/services/activity-service
+    ports:
+      - "5004:5004"
+    env_file:
+      - ./backend/services/activity-service/.env
+    depends_on:
+      - mongo
+      - auth-service
+
+  # 🧠 Lưu lịch sử hội thoại AI
+  memory-service:
+    build: ./backend/services/memory-service
+    ports:
+      - "5005:5005"
+    env_file:
+      - ./backend/services/memory-service/.env
+    depends_on:
+      - mongo
+      - auth-service
+
+  # 🤖 Xử lý truy vấn AI, gọi GPT
+  ai-service:
+    build: ./backend/services/ai-service
+    ports:
+      - "5006:5006"
+    env_file:
+      - ./backend/services/ai-service/.env
+    depends_on:
+      - mongo
+      - auth-service
+      - document-service
+      - activity-service
+
+  # 📈 Tổng hợp tiến độ nhóm
+  mcp-service:
+    build: ./backend/services/mcp-service
+    ports:
+      - "5007:5007"
+    env_file:
+      - ./backend/services/mcp-service/.env
+    depends_on:
+      - mongo
+      - auth-service
+
+  # 🚪 API Gateway – điểm vào duy nhất cho client
+  api-gateway:
+    build: ./backend/api-gateway
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/api-gateway/.env
+    depends_on:
+      - auth-service
+      - ai-service
+      - memory-service
+      - mcp-service
+
+  # 🗄️ MongoDB – cơ sở dữ liệu dùng chung
+  mongo:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:   # Volume lưu trữ dữ liệu MongoDB
