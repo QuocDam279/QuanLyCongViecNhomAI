@@ -92,6 +92,15 @@ services:
       - ai-service
       - memory-service
       - mcp-service
+  # 📣 Dịch vụ thông báo – gửi email nhắc nhở
+  notification-service:
+    build: ./backend/services/notification-service
+    ports:
+      - "5008:5008"
+    env_file:
+      - ./backend/services/notification-service/.env
+    depends_on:
+      - auth-service
 
   # 🗄️ MongoDB – cơ sở dữ liệu dùng chung
   mongo:
