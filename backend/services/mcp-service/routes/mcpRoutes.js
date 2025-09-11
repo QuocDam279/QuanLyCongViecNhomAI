@@ -6,4 +6,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 router.get('/group/:groupId', authMiddleware, mcpController.getGroupStatus);
 
+// Gợi ý thêm endpoint tạo nhiệm vụ
+router.post('/task', authMiddleware, mcpController.createTask);
+
 module.exports = router;

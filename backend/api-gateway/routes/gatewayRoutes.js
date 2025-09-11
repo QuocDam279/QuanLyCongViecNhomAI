@@ -3,13 +3,25 @@ const express = require('express');
 const router = express.Router();
 const proxyController = require('../controllers/proxyController');
 const authMiddleware = require('../middleware/authMiddleware');
+const multer = require('multer');
+const upload = multer(); // dùng memoryStorage để nhận ảnh từ Postman
 
-// 🔐 Auth Service – xác thực người dùng
+// 🔐 Auth Service – xác thực người dùng (không cần authMiddleware)
 router.use('/auth/:path?', (req, res) => {
   req.params.service = 'auth_service';
   proxyController.forwardToService(req, res);
 });
-// Không cần authMiddleware ở đây vì đây là nơi cấp token
+
+// 👤 User Service – hồ sơ người dùng (có authMiddleware)
+router.patch('/user/:path?', authMiddleware, upload.single('avatar'), (req, res) => {
+  req.params.service = 'user_service';
+  proxyController.forwardToService(req, res);
+});
+
+router.get('/user/:path?', authMiddleware, (req, res) => {
+  req.params.service = 'user_service';
+  proxyController.forwardToService(req, res);
+});
 
 // 👥 Group Service – quản lý nhóm
 router.use('/group/:path?', authMiddleware, (req, res) => {
@@ -18,7 +30,7 @@ router.use('/group/:path?', authMiddleware, (req, res) => {
 });
 
 // 📄 Document Service – truy xuất tài liệu
-router.use('/documents/:path?', authMiddleware, (req, res) => {
+router.use('/document/:path?', authMiddleware, upload.array('file', 5), (req, res) => {
   req.params.service = 'document_service';
   proxyController.forwardToService(req, res);
 });

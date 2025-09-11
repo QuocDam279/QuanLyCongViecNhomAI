@@ -1,4 +1,5 @@
 // controllers/groupController.js
+const axios = require('axios');
 const mongoose = require('mongoose');
 const Group = require('../models/Group');
 const GroupMember = require('../models/GroupMember');
@@ -74,27 +75,57 @@ exports.getMembers = async (req, res) => {
   try {
     const { groupId } = req.params;
 
-    // Lấy danh sách thành viên
     const members = await GroupMember.find({ groupId }).lean();
 
-    // Lấy danh sách userId
-    const userIds = members.map(m => m.userId);
+    const enrichedMembers = await Promise.all(
+      members.map(async (m) => {
+        try {
+          const response = await axios.get(
+            `http://auth-service:5001/api/user/${m.userId}`,
+            {
+              headers: { Authorization: req.headers.authorization }
+            }
+          );
+          return {
+            ...m,
+            user: response.data
+          };
+        } catch (err) {
+          return {
+            ...m,
+            user: null
+          };
+        }
+      })
+    );
 
-    // Lấy thông tin user tương ứng
-    const users = await User.find({ _id: { $in: userIds } }, 'name email').lean();
-
-    // Ghép thông tin user vào từng member
-    const result = members.map(m => {
-      const userInfo = users.find(u => u._id.toString() === m.userId.toString());
-      return {
-        ...m,
-        user: userInfo || null
-      };
-    });
-
-    res.json(result);
+    res.json(enrichedMembers);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+
+
+// Lấy danh sách nhóm của người dùng hiện tại
+exports.getUserGroups = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // Tìm tất cả groupId mà user đang tham gia
+    const memberships = await GroupMember.find({ userId }).lean();
+    const groupIds = memberships.map(m => m.groupId);
+
+    // Lấy thông tin nhóm tương ứng
+    const groups = await Group.find({ _id: { $in: groupIds } }).lean();
+
+    res.json({
+      success: true,
+      groups
+    });
+  } catch (err) {
+    console.error('❌ Lỗi lấy nhóm của người dùng:', err.message);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
@@ -104,6 +135,30 @@ exports.removeMember = async (req, res) => {
     const { groupId, userId } = req.params;
     await GroupMember.findOneAndDelete({ groupId, userId });
     res.json({ message: 'Xóa thành viên thành công' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Xóa nhóm (chỉ leader hoặc người tạo nhóm mới được phép)
+exports.deleteGroup = async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const userId = req.user.userId;
+
+    // Kiểm tra xem người dùng có phải là leader của nhóm không
+    const member = await GroupMember.findOne({ groupId, userId });
+    if (!member || member.role !== 'leader') {
+      return res.status(403).json({ error: 'Chỉ leader mới được phép xóa nhóm' });
+    }
+
+    // Xóa tất cả thành viên trong nhóm
+    await GroupMember.deleteMany({ groupId });
+
+    // Xóa nhóm
+    await Group.findByIdAndDelete(groupId);
+
+    res.json({ message: 'Đã xóa nhóm thành công' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

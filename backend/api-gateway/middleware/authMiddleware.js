@@ -2,15 +2,28 @@
 const jwt = require('jsonwebtoken');
 
 module.exports = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Thiếu token xác thực' });
-
   try {
+    const authHeader = req.headers.authorization;
+
+    // Kiểm tra header Authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, error: 'Thiếu hoặc sai định dạng token' });
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    // Xác thực token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+
+    // Gắn thông tin người dùng vào request
+    req.user = {
+      userId: decoded.userId,
+      role: decoded.role
+    };
+
     next();
   } catch (err) {
     console.error('❌ Token không hợp lệ:', err.message);
-    res.status(403).json({ error: 'Token không hợp lệ' });
+    res.status(403).json({ success: false, error: 'Token không hợp lệ hoặc đã hết hạn' });
   }
 };

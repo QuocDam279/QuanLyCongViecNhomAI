@@ -21,7 +21,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Routes
-router.post('/upload', auth, upload.single('file'), uploadDocument);
+router.post('/upload', auth, upload.array('file', 5), uploadDocument);
 router.post('/link', auth, linkDocument);
 router.get('/group/:groupId', auth, getDocumentsByGroup);
 router.delete('/:documentId', auth, deleteDocument);
