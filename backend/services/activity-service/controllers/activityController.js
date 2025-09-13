@@ -77,7 +77,7 @@ exports.getGroupTimeline = async (req, res) => {
         if (act.documentId) {
           try {
             const docRes = await axios.get(
-              `http://document-service:5003/api/document/${act.documentId}`,
+              `http://document-service:5003/api/documents/${act.documentId}`,
               {
                 headers: {
                   Authorization: req.headers.authorization

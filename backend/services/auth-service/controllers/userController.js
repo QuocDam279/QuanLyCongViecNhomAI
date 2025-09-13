@@ -1,22 +1,25 @@
 //backend/services/auth-service/controllers/userController.js
 const User = require('../models/User');
 
+// Cập nhật hồ sơ người dùng
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.userId;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Không xác định người dùng' });
+    }
+
     const updates = {};
 
-    // Cập nhật tên nếu có
     if (req.body.name) {
       updates.name = req.body.name.trim();
     }
 
-    // Cập nhật avatar nếu có file upload
     if (req.file) {
       updates.avatar = `/uploads/avatars/${req.file.filename}`;
     }
 
-    // Cập nhật thông tin người dùng
     const updatedUser = await User.findByIdAndUpdate(userId, updates, { new: true });
 
     res.json({
@@ -35,10 +38,21 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({ success: false, error: 'Không thể cập nhật hồ sơ' });
   }
 };
-//lấy hồ sơ người dùng
+
+// Lấy hồ sơ người dùng
 exports.getProfile = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    let userId = req.user.userId;
+
+    // Cho phép gọi nội bộ với userId truyền qua params
+    if (req.user.internal && req.params.userId) {
+      userId = req.params.userId;
+    }
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Không xác định người dùng' });
+    }
+
     const user = await User.findById(userId).select('-password');
 
     if (!user) {

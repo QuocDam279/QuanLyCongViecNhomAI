@@ -202,3 +202,69 @@ exports.getTaskDetail = async (req, res) => {
     res.status(500).json({ error: 'Không thể lấy chi tiết nhiệm vụ' });
   }
 };
+
+// 📅 Lấy danh sách nhiệm vụ sắp đến hạn
+exports.getUpcomingDeadlines = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    const twoDaysLater = new Date(today);
+    twoDaysLater.setDate(today.getDate() + 2);
+
+    // Lấy nhiệm vụ có deadline trong 3 ngày tới và chưa hoàn thành
+    const tasks = await TaskStatus.find({
+      deadline: { $gte: today, $lte: twoDaysLater },
+      status: { $ne: 'done' }
+    });
+
+    const reminders = [];
+
+    for (const task of tasks) {
+      const deadlineDate = new Date(task.deadline);
+      deadlineDate.setHours(0, 0, 0, 0);
+
+      let remindType = null;
+      if (deadlineDate.getTime() === today.getTime()) {
+        remindType = 'today';
+      } else if (deadlineDate.getTime() === tomorrow.getTime()) {
+        remindType = '1_day_before';
+      } else if (deadlineDate.getTime() === twoDaysLater.getTime()) {
+        remindType = '2_days_before';
+      }
+
+      if (remindType) {
+        try {
+          const userRes = await axios.get(
+            `http://auth-service:5001/api/user/${task.userId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${process.env.INTERNAL_API_KEY}`
+              }
+            }
+          );
+
+          const user = userRes.data;
+
+          reminders.push({
+            email: user.email,
+            name: user.name,
+            task: task.task,
+            deadline: task.deadline,
+            remindType
+          });
+        } catch (err) {
+          console.warn(`⚠️ Không thể lấy thông tin userId ${task.userId}: ${err.message}`);
+        }
+      }
+    }
+
+    res.json(reminders);
+  } catch (err) {
+    console.error('❌ Lỗi getUpcomingDeadlines:', err.message);
+    res.status(500).json({ error: 'Không thể lấy danh sách deadline' });
+  }
+};

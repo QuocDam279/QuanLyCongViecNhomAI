@@ -26,4 +26,7 @@ router.delete('/task/:taskId', authMiddleware, mcpController.deleteTask);
 // 🔍 Lấy chi tiết nhiệm vụ
 router.get('/task/:taskId', authMiddleware, mcpController.getTaskDetail);
 
+// 📅 Lấy danh sách nhiệm vụ sắp đến hạn (không cần auth)
+router.get('/upcoming-deadlines', mcpController.getUpcomingDeadlines);
+
 module.exports = router;

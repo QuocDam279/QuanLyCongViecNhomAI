@@ -59,4 +59,11 @@ router.use('/mcp/:path?', authMiddleware, (req, res) => {
   proxyController.forwardToService(req, res);
 });
 
+// 📬 Notification Service – gửi email nhắc việc
+router.use('/notify/:path?', (req, res) => {
+  req.params.service = 'notify_service';
+  proxyController.forwardToService(req, res);
+});
+
+
 module.exports = router;

@@ -22,11 +22,13 @@ exports.uploadDocument = async (req, res) => {
       return res.status(400).json({ error: 'groupId không hợp lệ' });
     }
 
-    if (!req.user || !mongoose.Types.ObjectId.isValid(req.user.userId)) {
-      return res.status(401).json({ error: 'Thông tin người dùng không hợp lệ' });
+    if (!req.user || (!req.user.internal && !mongoose.Types.ObjectId.isValid(req.user.userId))) {
+      return res.status(401).json({ error: 'Thông tin người dùng không hợp lệ hoặc không phải truy cập nội bộ' });
     }
 
-    const uploadedBy = new mongoose.Types.ObjectId(req.user.userId);
+    const uploadedBy = req.user.internal
+      ? null
+      : new mongoose.Types.ObjectId(req.user.userId);
     const groupObjectId = new mongoose.Types.ObjectId(groupId);
 
     const documents = await Promise.all(
@@ -62,7 +64,6 @@ exports.uploadDocument = async (req, res) => {
   }
 };
 
-
 // Liên kết tài liệu từ nguồn ngoài
 exports.linkDocument = async (req, res) => {
   try {
@@ -76,15 +77,19 @@ exports.linkDocument = async (req, res) => {
       return res.status(400).json({ error: 'groupId không hợp lệ' });
     }
 
-    if (!req.user || !mongoose.Types.ObjectId.isValid(req.user.userId)) {
-      return res.status(401).json({ error: 'Thông tin người dùng không hợp lệ' });
+    if (!req.user || (!req.user.internal && !mongoose.Types.ObjectId.isValid(req.user.userId))) {
+      return res.status(401).json({ error: 'Thông tin người dùng không hợp lệ hoặc không phải truy cập nội bộ' });
     }
+
+    const uploadedBy = req.user.internal
+      ? null
+      : new mongoose.Types.ObjectId(req.user.userId);
 
     const doc = await Document.create({
       title,
       source,
       link,
-      uploadedBy: new mongoose.Types.ObjectId(req.user.userId),
+      uploadedBy,
       groupId: new mongoose.Types.ObjectId(groupId)
     });
 
@@ -109,8 +114,7 @@ exports.linkDocument = async (req, res) => {
   }
 };
 
-
-// Lấy danh sách tài liệu của nhóm (dùng API để lấy thông tin người dùng)
+// Lấy danh sách tài liệu của nhóm
 exports.getDocumentsByGroup = async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -120,11 +124,15 @@ exports.getDocumentsByGroup = async (req, res) => {
     }
 
     const docs = await Document.find({ groupId });
-
     const enrichedDocs = [];
 
     for (const doc of docs) {
-      const userId = doc.uploadedBy.toString();
+      const userId = doc.uploadedBy?.toString();
+
+      if (!userId) {
+        enrichedDocs.push({ ...doc.toObject(), uploadedBy: null });
+        continue;
+      }
 
       try {
         const userRes = await axios.get(
@@ -162,7 +170,6 @@ exports.getDocumentsByGroup = async (req, res) => {
   }
 };
 
-
 // Xóa tài liệu
 exports.deleteDocument = async (req, res) => {
   try {
@@ -178,5 +185,26 @@ exports.deleteDocument = async (req, res) => {
   } catch (err) {
     console.error('❌ Lỗi deleteDocument:', err.message);
     res.status(500).json({ error: 'Lỗi máy chủ khi xóa tài liệu' });
+  }
+};
+
+// Lấy thông tin tài liệu theo ID
+exports.getDocumentById = async (req, res) => {
+  try {
+    const { documentId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(documentId)) {
+      return res.status(400).json({ error: 'documentId không hợp lệ' });
+    }
+
+    const doc = await Document.findById(documentId);
+    if (!doc) {
+      return res.status(404).json({ error: 'Không tìm thấy tài liệu' });
+    }
+
+    res.json(doc);
+  } catch (err) {
+    console.error('❌ Lỗi getDocumentById:', err.message);
+    res.status(500).json({ error: 'Lỗi máy chủ khi lấy tài liệu' });
   }
 };

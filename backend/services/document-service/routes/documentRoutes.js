@@ -1,3 +1,4 @@
+// backend/services/document-service/routes/documentRoutes.js
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
@@ -7,7 +8,8 @@ const {
   uploadDocument,
   linkDocument,
   getDocumentsByGroup,
-  deleteDocument
+  deleteDocument,
+  getDocumentById
 } = require('../controllers/documentController');
 
 // Cấu hình multer để lưu file vào uploads/
@@ -25,5 +27,7 @@ router.post('/upload', auth, upload.array('file', 5), uploadDocument);
 router.post('/link', auth, linkDocument);
 router.get('/group/:groupId', auth, getDocumentsByGroup);
 router.delete('/:documentId', auth, deleteDocument);
+router.get('/:documentId', auth, getDocumentById);
+
 
 module.exports = router;

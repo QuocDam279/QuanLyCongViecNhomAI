@@ -1,4 +1,9 @@
 //backend/services/ai-service/server.js
+const mongoose = require('mongoose');
+
+const connectDB = require('./config/db');
+connectDB();
+
 require('dotenv').config();
 const express = require('express');
 const app = express();
