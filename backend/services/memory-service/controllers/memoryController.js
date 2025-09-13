@@ -1,6 +1,7 @@
 // backend/services/memory-service/controllers/memoryController.js
 const Memory = require('../models/Memory');
 
+// Lưu một mục vào bộ nhớ
 exports.saveMemory = async (req, res) => {
   try {
     const { userId, groupId, question, answer, source } = req.body;
@@ -12,6 +13,7 @@ exports.saveMemory = async (req, res) => {
   }
 };
 
+// Lấy tất cả mục bộ nhớ của một người dùng
 exports.getUserMemory = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -23,6 +25,7 @@ exports.getUserMemory = async (req, res) => {
   }
 };
 
+// Lấy tất cả mục bộ nhớ của một nhóm
 exports.getGroupMemory = async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -34,6 +37,7 @@ exports.getGroupMemory = async (req, res) => {
   }
 };
 
+// Tìm kiếm trong bộ nhớ
 exports.searchMemory = async (req, res) => {
   try {
     const { userId, keyword } = req.query;

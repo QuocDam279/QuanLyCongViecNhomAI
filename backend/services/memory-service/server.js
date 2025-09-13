@@ -2,7 +2,10 @@
 require('dotenv').config();
 const express = require('express');
 const app = express();
-require('./config/db');
+
+// Gọi hàm kết nối DB
+const connectDB = require('./config/db');
+connectDB(); // ← phải gọi hàm này
 
 app.use(express.json());
 app.use('/api/memory', require('./routes/memoryRoutes'));

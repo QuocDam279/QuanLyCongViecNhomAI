@@ -35,9 +35,9 @@ router.use('/document/:path?', authMiddleware, upload.array('file', 5), (req, re
   proxyController.forwardToService(req, res);
 });
 
-// 📊 Activity Service – theo dõi hoạt động nhóm
+// 📊 Activity Service – theo dõi hoạt động nhóm, cá nhân nhóm
 router.use('/activities/:path?', authMiddleware, (req, res) => {
-  req.params.service = 'activity_service';
+  req.params.service = 'activities_service';
   proxyController.forwardToService(req, res);
 });
 

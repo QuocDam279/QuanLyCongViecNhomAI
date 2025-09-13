@@ -2,6 +2,8 @@
 const mongoose = require('mongoose');
 const Document = require('../models/Document');
 const path = require('path');
+const axios = require('axios');
+const logActivity = require('../utils/logActivityFromService');
 
 // Upload file trực tiếp
 exports.uploadDocument = async (req, res) => {
@@ -28,15 +30,26 @@ exports.uploadDocument = async (req, res) => {
     const groupObjectId = new mongoose.Types.ObjectId(groupId);
 
     const documents = await Promise.all(
-      req.files.map((file) =>
-        Document.create({
+      req.files.map(async (file) => {
+        const doc = await Document.create({
           title,
           source: 'upload',
           filePath: `/files/${file.filename}`,
           uploadedBy,
           groupId: groupObjectId
-        })
-      )
+        });
+
+        // Ghi log hoạt động
+        await logActivity({
+          type: 'upload',
+          description: `Người dùng đã upload tài liệu "${title}"`,
+          groupId,
+          documentId: doc._id,
+          token: req.headers.authorization
+        });
+
+        return doc;
+      })
     );
 
     res.status(201).json({
@@ -48,6 +61,7 @@ exports.uploadDocument = async (req, res) => {
     res.status(500).json({ error: 'Lỗi máy chủ khi upload tài liệu' });
   }
 };
+
 
 // Liên kết tài liệu từ nguồn ngoài
 exports.linkDocument = async (req, res) => {
@@ -74,6 +88,15 @@ exports.linkDocument = async (req, res) => {
       groupId: new mongoose.Types.ObjectId(groupId)
     });
 
+    // Ghi log hoạt động
+    await logActivity({
+      type: 'link',
+      description: `Người dùng đã liên kết tài liệu "${title}" từ nguồn ${source}`,
+      groupId,
+      documentId: doc._id,
+      token: req.headers.authorization
+    });
+
     res.status(201).json({
       message: 'Liên kết tài liệu thành công',
       document: doc
@@ -86,7 +109,8 @@ exports.linkDocument = async (req, res) => {
   }
 };
 
-// Lấy danh sách tài liệu của nhóm
+
+// Lấy danh sách tài liệu của nhóm (dùng API để lấy thông tin người dùng)
 exports.getDocumentsByGroup = async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -95,37 +119,49 @@ exports.getDocumentsByGroup = async (req, res) => {
       return res.status(400).json({ error: 'groupId không hợp lệ' });
     }
 
-    const docs = await mongoose.connection
-      .collection('documents')
-      .aggregate([
-        {
-          $match: {
-            groupId: new mongoose.Types.ObjectId(groupId)
-          }
-        },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'uploadedBy',
-            foreignField: '_id',
-            as: 'uploadedBy'
-          }
-        },
-        {
-          $unwind: {
-            path: '$uploadedBy',
-            preserveNullAndEmptyArrays: true
-          }
-        }
-      ])
-      .toArray();
+    const docs = await Document.find({ groupId });
 
-    res.json(docs);
+    const enrichedDocs = [];
+
+    for (const doc of docs) {
+      const userId = doc.uploadedBy.toString();
+
+      try {
+        const userRes = await axios.get(
+          `http://auth-service:5001/api/user/${userId}`,
+          {
+            headers: {
+              Authorization: req.headers.authorization
+            }
+          }
+        );
+
+        const user = userRes.data;
+
+        enrichedDocs.push({
+          ...doc.toObject(),
+          uploadedBy: {
+            _id: user._id,
+            name: user.name,
+            email: user.email
+          }
+        });
+      } catch (err) {
+        console.warn(`⚠️ Không thể lấy thông tin userId ${userId}: ${err.response?.status || err.message}`);
+        enrichedDocs.push({
+          ...doc.toObject(),
+          uploadedBy: null
+        });
+      }
+    }
+
+    res.json(enrichedDocs);
   } catch (err) {
     console.error('❌ Lỗi getDocumentsByGroup:', err.message);
     res.status(500).json({ error: 'Lỗi máy chủ khi lấy danh sách tài liệu' });
   }
 };
+
 
 // Xóa tài liệu
 exports.deleteDocument = async (req, res) => {
