@@ -1,32 +1,193 @@
-import { useState } from "react"
-import AuthInput from "../components/AuthInput"
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import "../styles/register.css";
 
 function Register() {
-  const [form, setForm] = useState({ name: "", email: "", password: "" })
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value })
-  }
+    setForm({ ...form, [e.target.name]: e.target.value });
+    setError("");
+    setSuccess("");
+  };
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    console.log("Register data:", form)
-    // TODO: Gọi API đăng ký sau này
-  }
+  useEffect(() => {
+    if (success || error) {
+      const timer = setTimeout(() => {
+        setError("");
+        setSuccess("");
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [success, error]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!form.name || !form.email || !form.password || !form.confirmPassword) {
+      setError("Vui lòng điền đầy đủ tất cả các trường.");
+      return;
+    }
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) {
+      setError("Email không hợp lệ.");
+      return;
+    }
+
+    if (form.password.length < 6) {
+      setError("Mật khẩu phải có ít nhất 6 ký tự.");
+      return;
+    }
+
+    if (form.password !== form.confirmPassword) {
+      setError("Mật khẩu xác nhận không khớp.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      setSuccess("");
+
+      const API_URL = import.meta.env.VITE_API_URL;
+
+      const payload = {
+        name: form.name.trim(),
+        email: form.email.toLowerCase().trim(),
+        password: form.password,
+      };
+
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const msg = data.message || data.error || "Yêu cầu không hợp lệ.";
+
+        if (response.status === 400) {
+          if (msg.includes("Email")) {
+            throw new Error("Email đã được sử dụng. Vui lòng chọn email khác.");
+          }
+          if (msg.includes("role")) {
+            throw new Error("Vai trò không hợp lệ.");
+          }
+          if (msg.includes("Thiếu thông tin")) {
+            throw new Error("Thiếu thông tin bắt buộc từ phía server.");
+          }
+          throw new Error(msg);
+        }
+
+        if (response.status === 500) {
+          throw new Error("Lỗi máy chủ. Vui lòng thử lại sau.");
+        }
+
+        throw new Error(msg);
+      }
+
+      setSuccess("Đăng ký thành công! Chào mừng bạn đến với QuestDo.");
+
+      setTimeout(() => {
+        navigate("/login", { replace: true });
+      }, 3500);
+    } catch (err) {
+      console.error("❌ Registration error:", err);
+      setError(err.message || "Đã xảy ra lỗi không xác định.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-md w-80">
-        <h2 className="text-xl font-bold mb-4 text-center">Đăng ký</h2>
-        <AuthInput label="Tên" name="name" value={form.name} onChange={handleChange} />
-        <AuthInput label="Email" name="email" type="email" value={form.email} onChange={handleChange} />
-        <AuthInput label="Mật khẩu" name="password" type="password" value={form.password} onChange={handleChange} />
-        <button type="submit" className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
-          Đăng ký
-        </button>
-      </form>
+    <div className="register-root">
+      <div className="hero">
+        <div className="card">
+          <div className="brand">
+            <div className="logo">QD</div>
+            <div className="title">QuestDo</div>
+          </div>
+
+          <h2 className="heading">Tạo tài khoản mới</h2>
+          <p className="sub">Điền thông tin để bắt đầu hành trình của bạn</p>
+
+          <form className="form" onSubmit={handleSubmit}>
+            <label className={`field ${form.name ? "filled" : ""}`}>
+              <input
+                type="text"
+                name="name"
+                value={form.name}
+                onChange={handleChange}
+                required
+              />
+              <span className="label-text">Họ và tên</span>
+            </label>
+
+            <label className={`field ${form.email ? "filled" : ""}`}>
+              <input
+                type="email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                required
+              />
+              <span className="label-text">Email</span>
+            </label>
+
+            <label className={`field ${form.password ? "filled" : ""}`}>
+              <input
+                type="password"
+                name="password"
+                value={form.password}
+                onChange={handleChange}
+                required
+              />
+              <span className="label-text">Mật khẩu</span>
+            </label>
+
+            <label className={`field ${form.confirmPassword ? "filled" : ""}`}>
+              <input
+                type="password"
+                name="confirmPassword"
+                value={form.confirmPassword}
+                onChange={handleChange}
+                required
+              />
+              <span className="label-text">Xác nhận mật khẩu</span>
+            </label>
+
+            <button type="submit" className="login-btn" disabled={loading}>
+              {loading ? "Đang đăng ký..." : "Đăng ký"}
+            </button>
+
+            <div className="register-link">
+              <span>Đã có tài khoản?</span>
+              <Link to="/login">Đăng nhập</Link>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* Overlay thông báo */}
+      <div className="message-overlay">
+        {success && <div className="success-toast">{success}</div>}
+        {error && <div className="error-toast">{error}</div>}
+      </div>
     </div>
-  )
+  );
 }
 
-export default Register
+export default Register;

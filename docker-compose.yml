@@ -1,4 +1,3 @@
-
 services:
   # 🛡️ Service xác thực người dùng
   auth-service:
@@ -102,6 +101,20 @@ services:
       - ./backend/services/notification-service/.env
     depends_on:
       - auth-service
+  
+  # 🌐 Frontend React
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules   # giữ node_modules trong container, không bị ghi đè
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
 
   # 🗄️ MongoDB – cơ sở dữ liệu dùng chung
   mongo:

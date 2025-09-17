@@ -48,13 +48,26 @@ exports.forwardToService = async (req, res) => {
     } else {
       // Nếu là JSON
       config.data = req.body;
+      config.headers = {
+        'Content-Type': 'application/json',
+        ...(req.headers.authorization && { Authorization: req.headers.authorization })
+      };
     }
+    console.log("🔗 Forwarding to:", url);
+    console.log("📦 Method:", method);
+    console.log("📤 Headers:", config.headers);
+    console.log("📤 Body:", config.data);
 
     const response = await axios(config);
     res.status(response.status).json(response.data);
   } catch (err) {
-    console.error(`❌ Lỗi gọi ${service}:`, err.message);
-    res.status(err.response?.status || 500).json({ error: err.message });
+    console.error(`❌ Lỗi gọi ${service}:`, err.response?.data || err.message);
+
+    if (err.response && err.response.data) {
+      res.status(err.response.status).json(err.response.data);
+    } else {
+      res.status(500).json({ success: false, message: "Lỗi Gateway hoặc không nhận được phản hồi từ dịch vụ." });
+    }
   }
 
 };

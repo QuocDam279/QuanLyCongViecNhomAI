@@ -6,12 +6,20 @@ const jwt = require('jsonwebtoken');
 // 📌 Đăng ký tài khoản
 exports.registerUser = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
+    const role = req.body.role || 'member';
+
+    // Kiểm tra đầu vào
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, message: 'Thiếu thông tin bắt buộc.' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
 
     // Kiểm tra email đã tồn tại
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
-      return res.status(400).json({ success: false, error: 'Email đã tồn tại' });
+      return res.status(400).json({ success: false, message: 'Email đã được sử dụng.' });
     }
 
     // Mã hóa mật khẩu
@@ -19,20 +27,20 @@ exports.registerUser = async (req, res) => {
 
     // Tạo người dùng mới
     const user = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: normalizedEmail,
       password: hashedPassword,
       role
     });
 
     res.status(201).json({
       success: true,
-      message: 'Đăng ký thành công',
+      message: 'Đăng ký thành công.',
       userId: user._id
     });
   } catch (err) {
-    console.error('❌ Lỗi đăng ký:', err.message);
-    res.status(500).json({ success: false, error: 'Lỗi máy chủ' });
+    console.error('❌ Lỗi đăng ký:', err);
+    res.status(500).json({ success: false, message: 'Lỗi máy chủ. Vui lòng thử lại sau.' });
   }
 };
 
@@ -41,16 +49,22 @@ exports.loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Thiếu thông tin đăng nhập.' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Tìm người dùng theo email
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
-      return res.status(400).json({ success: false, error: 'Email không tồn tại' });
+      return res.status(400).json({ success: false, message: 'Email không tồn tại.' });
     }
 
     // So sánh mật khẩu
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      return res.status(400).json({ success: false, error: 'Sai mật khẩu' });
+      return res.status(400).json({ success: false, message: 'Sai mật khẩu.' });
     }
 
     // Tạo JWT
@@ -62,7 +76,7 @@ exports.loginUser = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Đăng nhập thành công',
+      message: 'Đăng nhập thành công.',
       token,
       user: {
         _id: user._id,
@@ -73,7 +87,7 @@ exports.loginUser = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('❌ Lỗi đăng nhập:', err.message);
-    res.status(500).json({ success: false, error: 'Lỗi máy chủ' });
+    console.error('❌ Lỗi đăng nhập:', err);
+    res.status(500).json({ success: false, message: 'Lỗi máy chủ. Vui lòng thử lại sau.' });
   }
 };

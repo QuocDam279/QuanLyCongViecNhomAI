@@ -1,14 +1,12 @@
-FROM node:22.12.0-alpine
+FROM node:20
 
 WORKDIR /app
 
-# Copy package.json và lock file trước
 COPY package*.json ./
 
-# Cài dependencies
-RUN npm install
+RUN npm install --legacy-peer-deps
 
-# Không copy source code vào đây, vì docker-compose đã mount ./frontend:/app
+COPY . .
 
 EXPOSE 5173
 
