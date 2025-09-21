@@ -4,20 +4,17 @@ const mongoose = require('mongoose');
 const taskStatusSchema = new mongoose.Schema({
   groupId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Group',
-    required: true
+    required: true, // chỉ lưu ObjectId, không ref sang Group
   },
 
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    required: true, // chỉ lưu ObjectId, thông tin user lấy từ auth-service
   },
 
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    required: true, // chỉ lưu ObjectId, thông tin user lấy từ auth-service
   },
 
   task: {
@@ -38,7 +35,8 @@ const taskStatusSchema = new mongoose.Schema({
   },
 
   deadline: {
-    type: Date
+    type: Date,
+    required: true
   },
 
   completedAt: {
@@ -47,13 +45,14 @@ const taskStatusSchema = new mongoose.Schema({
 
   comments: [
     {
-      userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      userId: { type: mongoose.Schema.Types.ObjectId }, // thông tin user lấy từ auth-service
       message: String,
       createdAt: { type: Date, default: Date.now }
     }
   ],
 
   tags: [String],
+  
   attachments: [String]
 
 }, { timestamps: true });

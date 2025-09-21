@@ -3,7 +3,7 @@ import { Bell, Search } from "lucide-react";
 
 export default function Header() {
   return (
-    <header className="w-full bg-blue-200 border-b border-slate-200 px-4 py-2 flex items-center justify-between shadow-sm h-12">
+    <header className="w-full bg-blue-200 px-4 py-2 flex items-center justify-between shadow-sm h-12">
       {/* Logo */}
       <div></div>
 

@@ -1,14 +1,14 @@
 // backend/services/mcp-service/routes/mcpRoutes.js
-// backend/services/mcp-service/routes/mcpRoutes.js
 const express = require('express');
 const router = express.Router();
+
 const mcpController = require('../controllers/mcpController');
 const authMiddleware = require('../middleware/authMiddleware');
 
 // 📊 Lấy danh sách nhiệm vụ theo nhóm
 router.get('/group/:groupId', authMiddleware, mcpController.getGroupStatus);
 
-// 📝 Tạo nhiệm vụ mới
+// 📝 Tạo nhiệm vụ mới (không còn upload file)
 router.post('/task', authMiddleware, mcpController.createTask);
 
 // 🔄 Cập nhật trạng thái nhiệm vụ
@@ -28,5 +28,8 @@ router.get('/task/:taskId', authMiddleware, mcpController.getTaskDetail);
 
 // 📅 Lấy danh sách nhiệm vụ sắp đến hạn (không cần auth)
 router.get('/upcoming-deadlines', mcpController.getUpcomingDeadlines);
+
+// ✏️ Cập nhật toàn bộ thông tin nhiệm vụ
+router.put('/task/:taskId', authMiddleware, mcpController.updateTask);
 
 module.exports = router;

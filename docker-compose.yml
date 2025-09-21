@@ -1,17 +1,21 @@
+version: '3.9'
+
 services:
-  # 🛡️ Service xác thực người dùng
   auth-service:
     build: ./backend/services/auth-service
+    container_name: auth-service
     ports:
       - "5001:5001"
     env_file:
       - ./backend/services/auth-service/.env
     depends_on:
       - mongo
+    networks:
+      - appnet
 
-  # 👥 Quản lý nhóm và thành viên
   group-service:
     build: ./backend/services/group-service
+    container_name: group-service
     ports:
       - "5002:5002"
     env_file:
@@ -19,23 +23,27 @@ services:
     depends_on:
       - mongo
       - auth-service
+    networks:
+      - appnet
 
-  # 📄 Lưu trữ và truy xuất tài liệu
   document-service:
     build: ./backend/services/document-service
+    container_name: document-service
     ports:
       - "5003:5003"
     env_file:
       - ./backend/services/document-service/.env
     volumes:
-      - ./uploads:/app/uploads   # Mount thư mục uploads để lưu file bền vững
+      - ./uploads:/app/uploads
     depends_on:
       - mongo
       - auth-service
+    networks:
+      - appnet
 
-  # 📊 Theo dõi hoạt động nhóm
   activity-service:
     build: ./backend/services/activity-service
+    container_name: activity-service
     ports:
       - "5004:5004"
     env_file:
@@ -43,10 +51,12 @@ services:
     depends_on:
       - mongo
       - auth-service
+    networks:
+      - appnet
 
-  # 🧠 Lưu lịch sử hội thoại AI
   memory-service:
     build: ./backend/services/memory-service
+    container_name: memory-service
     ports:
       - "5005:5005"
     env_file:
@@ -54,10 +64,12 @@ services:
     depends_on:
       - mongo
       - auth-service
+    networks:
+      - appnet
 
-  # 🤖 Xử lý truy vấn AI, gọi GPT
   ai-service:
     build: ./backend/services/ai-service
+    container_name: ai-service
     ports:
       - "5006:5006"
     env_file:
@@ -67,10 +79,12 @@ services:
       - auth-service
       - document-service
       - activity-service
+    networks:
+      - appnet
 
-  # 📈 Tổng hợp tiến độ nhóm
   mcp-service:
     build: ./backend/services/mcp-service
+    container_name: mcp-service
     ports:
       - "5007:5007"
     env_file:
@@ -78,10 +92,12 @@ services:
     depends_on:
       - mongo
       - auth-service
+    networks:
+      - appnet
 
-  # 🚪 API Gateway – điểm vào duy nhất cho client
   api-gateway:
     build: ./backend/api-gateway
+    container_name: api-gateway
     ports:
       - "5000:5000"
     env_file:
@@ -92,37 +108,50 @@ services:
       - memory-service
       - mcp-service
       - notification-service
-  # 📣 Dịch vụ thông báo – gửi email nhắc nhở
+    networks:
+      - appnet
+
   notification-service:
     build: ./backend/services/notification-service
+    container_name: notification-service
     ports:
       - "5008:5008"
     env_file:
       - ./backend/services/notification-service/.env
     depends_on:
       - auth-service
-  
-  # 🌐 Frontend React
+    networks:
+      - appnet
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: frontend
     ports:
       - "5173:5173"
     volumes:
       - ./frontend:/app
-      - /app/node_modules   # giữ node_modules trong container, không bị ghi đè
+      - /app/node_modules
     environment:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
+    networks:
+      - appnet
 
-  # 🗄️ MongoDB – cơ sở dữ liệu dùng chung
   mongo:
     image: mongo:6
+    container_name: mongo
     ports:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    networks:
+      - appnet
 
 volumes:
-  mongo_data:   # Volume lưu trữ dữ liệu MongoDB
+  mongo_data:
+
+networks:
+  appnet:
+    driver: bridge

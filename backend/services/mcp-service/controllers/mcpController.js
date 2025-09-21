@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const axios = require('axios');
 const TaskStatus = require('../models/TaskStatus');
 
+
 // Lấy danh sách nhiệm vụ theo nhóm
 exports.getGroupStatus = async (req, res) => {
   try {
@@ -56,11 +57,12 @@ exports.getGroupStatus = async (req, res) => {
 // Tạo nhiệm vụ mới
 exports.createTask = async (req, res) => {
   try {
-    const { groupId, userId, task, description, deadline, tags, attachments } = req.body;
+    const { groupId, userId, task, description, deadline, tags, status, attachments } = req.body;
     const createdBy = req.user?.userId;
 
-    if (!groupId || !userId || !task) {
-      return res.status(400).json({ error: 'Thiếu thông tin nhiệm vụ' });
+    // Kiểm tra các field bắt buộc
+    if (!groupId || !userId || !task || !deadline) {
+      return res.status(400).json({ error: 'Thiếu thông tin bắt buộc (groupId, userId, task, deadline)' });
     }
 
     if (
@@ -71,15 +73,22 @@ exports.createTask = async (req, res) => {
       return res.status(400).json({ error: 'ID không hợp lệ' });
     }
 
+    // Kiểm tra deadline hợp lệ
+    const deadlineDate = new Date(deadline);
+    if (isNaN(deadlineDate.getTime())) {
+      return res.status(400).json({ error: 'Deadline không hợp lệ' });
+    }
+
     const newTask = await TaskStatus.create({
       groupId,
       userId,
       createdBy,
       task,
       description,
-      deadline,
+      deadline: deadlineDate,
+      status: status || 'pending', // mặc định pending nếu frontend không gửi
       tags,
-      attachments
+      attachments // giờ chỉ nhận từ JSON body
     });
 
     res.status(201).json({ message: 'Tạo nhiệm vụ thành công', task: newTask });
@@ -184,7 +193,6 @@ exports.deleteTask = async (req, res) => {
   }
 };
 
-// Lấy chi tiết nhiệm vụ
 exports.getTaskDetail = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -193,10 +201,50 @@ exports.getTaskDetail = async (req, res) => {
       return res.status(400).json({ error: 'taskId không hợp lệ' });
     }
 
-    const task = await TaskStatus.findById(taskId);
+    // Lấy task kèm thông tin group (chỉ _id)
+    const task = await TaskStatus.findById(taskId).populate('groupId', '_id');
     if (!task) return res.status(404).json({ error: 'Không tìm thấy nhiệm vụ' });
 
-    res.json(task);
+    const authHeader = { headers: { Authorization: req.headers.authorization } };
+
+    // Lấy thông tin user thực hiện
+    let user = null;
+    try {
+      const resUser = await axios.get(`http://auth-service:5001/api/user/${task.userId}`, authHeader);
+      user = resUser.data;
+    } catch (err) {
+      console.warn(`⚠️ Không lấy được thông tin userId ${task.userId}: ${err.response?.status || err.message}`);
+    }
+
+    // Lấy thông tin người tạo
+    let createdBy = null;
+    try {
+      const resCreated = await axios.get(`http://auth-service:5001/api/user/${task.createdBy}`, authHeader);
+      createdBy = resCreated.data;
+    } catch (err) {
+      console.warn(`⚠️ Không lấy được thông tin createdBy ${task.createdBy}: ${err.response?.status || err.message}`);
+    }
+
+    // Lấy thông tin bình luận
+    const commentsWithUser = await Promise.all(
+      (task.comments || []).map(async (c) => {
+        let commentUser = null;
+        try {
+          const resC = await axios.get(`http://auth-service:5001/api/user/${c.userId}`, authHeader);
+          commentUser = resC.data;
+        } catch (err) {
+          console.warn(`⚠️ Không lấy được thông tin bình luận userId ${c.userId}: ${err.response?.status || err.message}`);
+        }
+        return { ...c.toObject(), user: commentUser };
+      })
+    );
+
+    res.json({
+      ...task.toObject(),
+      user,           // người thực hiện
+      createdBy,      // người tạo
+      comments: commentsWithUser
+    });
   } catch (err) {
     console.error('❌ Lỗi getTaskDetail:', err.message);
     res.status(500).json({ error: 'Không thể lấy chi tiết nhiệm vụ' });
@@ -266,5 +314,26 @@ exports.getUpcomingDeadlines = async (req, res) => {
   } catch (err) {
     console.error('❌ Lỗi getUpcomingDeadlines:', err.message);
     res.status(500).json({ error: 'Không thể lấy danh sách deadline' });
+  }
+};
+
+// ✏️ Cập nhật toàn bộ thông tin nhiệm vụ
+exports.updateTask = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const updateData = req.body;
+
+    const updated = await TaskStatus.findByIdAndUpdate(taskId, updateData, {
+      new: true,
+    });
+
+    if (!updated) {
+      return res.status(404).json({ error: "Không tìm thấy nhiệm vụ" });
+    }
+
+    res.json(updated);
+  } catch (err) {
+    console.error("❌ Lỗi updateTask:", err);
+    res.status(500).json({ error: "Cập nhật nhiệm vụ thất bại" });
   }
 };

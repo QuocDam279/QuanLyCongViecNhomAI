@@ -29,43 +29,77 @@ exports.createGroup = async (req, res) => {
   }
 };
 
-// Mời thành viên
+// Mời thành viên bằng email
 exports.inviteMember = async (req, res) => {
   try {
-    const { userId, role } = req.body;
+    const { email, role } = req.body;
     const { groupId } = req.params;
 
-    const existing = await GroupMember.findOne({ groupId, userId });
-    if (existing) return res.status(400).json({ error: 'Thành viên đã tồn tại' });
+    // kiểm tra group tồn tại
+    const group = await Group.findById(groupId);
+    if (!group) return res.status(404).json({ error: "Nhóm không tồn tại" });
 
+    // 🔗 gọi sang auth-service để tìm user theo email
+    let user;
+    try {
+      const response = await axios.get(
+        `http://auth-service:5001/api/user/by-email/${encodeURIComponent(email)}`,
+        { headers: { Authorization: req.headers.authorization } }
+      );
+      user = response.data;
+    } catch (err) {
+      return res.status(404).json({ error: "Tài khoản không tồn tại" });
+    }
+
+    // kiểm tra trùng
+    const existing = await GroupMember.findOne({ groupId, userId: user._id });
+    if (existing) return res.status(400).json({ error: "Thành viên đã tồn tại" });
+
+    // thêm member
     const member = await GroupMember.create({
       groupId: new mongoose.Types.ObjectId(groupId),
-      userId: new mongoose.Types.ObjectId(userId),
-      role: role || 'member'
+      userId: new mongoose.Types.ObjectId(user._id),
+      role: role || "member",
     });
 
-    res.status(201).json({ message: 'Mời thành viên thành công', member });
+    res.status(201).json({
+      message: "Mời thành viên thành công",
+      member: {
+        ...member.toObject(),
+        user: { _id: user._id, name: user.name, email: user.email }
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
 // Phân công vai trò
+// Phân công vai trò (chỉ leader mới được chuyển leader)
 exports.assignRole = async (req, res) => {
   try {
     const { userId, role } = req.body;
     const { groupId } = req.params;
 
-    const member = await GroupMember.findOneAndUpdate(
-      { groupId, userId },
-      { role },
-      { new: true }
-    );
+    // Kiểm tra member mới tồn tại
+    const memberToUpdate = await GroupMember.findOne({ groupId, userId });
+    if (!memberToUpdate) return res.status(404).json({ error: 'Không tìm thấy thành viên' });
 
-    if (!member) return res.status(404).json({ error: 'Không tìm thấy thành viên' });
+    if (role === 'leader') {
+      // Tìm leader hiện tại và hạ quyền thành member
+      await GroupMember.updateMany(
+        { groupId, role: 'leader' },
+        { role: 'member' }
+      );
+    }
 
-    res.json({ message: 'Cập nhật vai trò thành công', member });
+    // Gán role mới cho member
+    memberToUpdate.role = role;
+    await memberToUpdate.save();
+
+    res.json({ message: 'Cập nhật vai trò thành công', member: memberToUpdate });
   } catch (err) {
+    console.error('assignRole error:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -132,11 +166,43 @@ exports.getUserGroups = async (req, res) => {
 // Xóa hoặc rời nhóm
 exports.removeMember = async (req, res) => {
   try {
-    const { groupId, userId } = req.params;
-    await GroupMember.findOneAndDelete({ groupId, userId });
-    res.json({ message: 'Xóa thành viên thành công' });
+    const { groupId, userId: targetUserId } = req.params;
+    const requesterId = req.user && req.user.userId; // id người gọi API (từ auth middleware)
+
+    if (!requesterId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Tìm membership của target và requester
+    const targetMember = await GroupMember.findOne({ groupId, userId: targetUserId });
+    if (!targetMember) {
+      return res.status(404).json({ error: 'Thành viên không tồn tại trong nhóm' });
+    }
+
+    // Nếu người gọi là chính người bị xóa -> cho phép (rời nhóm)
+    if (requesterId === String(targetUserId) || requesterId === targetUserId) {
+      await GroupMember.findOneAndDelete({ groupId, userId: targetUserId });
+      return res.json({ message: 'Bạn đã rời nhóm / Thành viên đã được xóa' });
+    }
+
+    // Nếu không phải chính họ, kiểm tra requester có phải leader không
+    const requesterMember = await GroupMember.findOne({ groupId, userId: requesterId });
+    if (!requesterMember || requesterMember.role !== 'leader') {
+      return res.status(403).json({ error: 'Chỉ leader mới được xóa thành viên khác' });
+    }
+
+    // Ngăn không cho leader xóa leader khác (nếu bạn muốn nghiêm ngặt)
+    if (targetMember.role === 'leader') {
+      return res.status(403).json({ error: 'Không thể xóa một leader khác' });
+    }
+
+    // Thực hiện xóa
+    await GroupMember.findOneAndDelete({ groupId, userId: targetUserId });
+
+    return res.json({ message: 'Xóa thành viên thành công' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('❌ removeMember error:', err);
+    return res.status(500).json({ error: err.message });
   }
 };
 
@@ -163,3 +229,41 @@ exports.deleteGroup = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+// Sửa thông tin nhóm (tên, mô tả)
+exports.updateGroup = async (req, res) => {
+  try {
+    const { groupId } = req.params; // lấy id nhóm từ url
+    const { name, description } = req.body;
+
+    // kiểm tra nhóm tồn tại
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ message: "Nhóm không tồn tại" });
+    }
+
+    // chỉ leader mới được sửa nhóm
+    const member = await GroupMember.findOne({
+      groupId: groupId,
+      userId: req.user.userId,
+    });
+
+    if (!member || member.role !== "leader") {
+      return res
+        .status(403)
+        .json({ message: "Bạn không có quyền sửa nhóm này" });
+    }
+
+    // cập nhật thông tin (cho phép xóa mô tả bằng cách gửi "")
+    if (name !== undefined) group.name = name;
+    if (description !== undefined) group.description = description;
+
+    await group.save();
+
+    res.status(200).json({ message: "Cập nhật nhóm thành công", group });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
